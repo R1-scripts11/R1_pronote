@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+ 
+model User {
+  id            String          @id @default(cuid()) // Identifiant unique pour chaque utilisateur, généré automatiquement.
+  name          String?         // Nom de l'utilisateur, facultatif.
+  email         String?         @unique // Adresse email de l'utilisateur, facultative mais unique.
+  password      String?         // Mot de passe de l'utilisateur, facultatif.
+  emailVerified DateTime?       // Date à laquelle l'email a été vérifié, facultatif.
+  image         String?         // URL de l'image de l'utilisateur, facultatif.
+  accounts      Account[]       // Relation avec le modèle Account. Un utilisateur peut avoir plusieurs comptes (e.g., Google, GitHub).
+  sessions      Session[]       // Relation avec le modèle Session. Un utilisateur peut avoir plusieurs sessions actives.
+  // Optional for WebAuthn support
+  Authenticator Authenticator[] // Relation avec le modèle Authenticator pour le support WebAuthn (authentification par clé de sécurité).
+
+  createdAt DateTime @default(now()) // Date de création de l'utilisateur, définie automatiquement.
+  updatedAt DateTime @updatedAt      // Date de la dernière mise à jour de l'utilisateur, mise à jour automatiquement.
+}
+ 
+ //Un utilisateur est seul mais peut se connecter avec plusieurs comptes externes.
+model Account {
+  id                String  @id @default(cuid()) // Identifiant unique pour chaque compte, généré automatiquement.
+  userId            String  // Référence à l'utilisateur associé.
+  type              String  // Type de compte (e.g., OAuth, credentials).
+  provider          String  // Nom du fournisseur de service (e.g., 'google', 'github').
+  providerAccountId String  // Identifiant unique du compte auprès du fournisseur (e.g., ID utilisateur Google).
+  refresh_token     String? // Jeton de rafraîchissement pour renouveler le jeton d'accès, facultatif.
+  access_token      String? // Jeton d'accès pour le fournisseur, facultatif.
+  expires_at        Int?    // Date d'expiration du jeton d'accès, facultatif.
+  token_type        String? // Type de jeton (e.g., Bearer), facultatif.
+  scope             String? // Scopes d'accès associés au jeton, facultatif.
+  id_token          String? // Jeton d'identité (généralement JWT), facultatif.
+  session_state     String? // État de session, facultatif.
+ 
+  createdAt DateTime @default(now()) // Date de création du compte, définie automatiquement.
+  updatedAt DateTime @updatedAt      // Date de la dernière mise à jour du compte, mise à jour automatiquement.
+ 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // Relation avec le modèle User. Si l'utilisateur est supprimé, les comptes associés le seront aussi.
+
+  @@unique([provider, providerAccountId]) // Contrainte d'unicité sur le couple (provider, providerAccountId) pour éviter les doublons de comptes avec le même fournisseur.
+}
+ 
+model Session {
+  id           String   @id @default(cuid()) // Identifiant unique pour chaque session, généré automatiquement.
+  sessionToken String   @unique // Jeton unique pour identifier la session.
+  userId       String   // Référence à l'utilisateur associé.
+  expires      DateTime // Date d'expiration de la session.
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade) // Relation avec le modèle User. Si l'utilisateur est supprimé, les sessions associées le seront aussi.
+ 
+  createdAt DateTime @default(now()) // Date de création de la session, définie automatiquement.
+  updatedAt DateTime @updatedAt      // Date de la dernière mise à jour de la session, mise à jour automatiquement.
+}
+ 
+model VerificationToken {
+  identifier String // Identifiant (e.g., email ou numéro de téléphone) utilisé pour la vérification.
+  token      String // Le jeton de vérification.
+  expires    DateTime // Date d'expiration du jeton de vérification.
+
+  @@unique([identifier, token]) // Contrainte d'unicité sur le couple (identifier, token) pour éviter les doublons de jetons pour un même identifiant.
+}
+ 
+// Optional for WebAuthn support
+model Authenticator {
+  credentialID         String  @unique // Identifiant unique pour chaque clé d'authentification.
+  userId               String  // Référence à l'utilisateur associé.
+  providerAccountId    String  // Identifiant du compte auprès du fournisseur associé à l'authentificateur.
+  credentialPublicKey  String  // Clé publique associée à l'authentificateur.
+  counter              Int     // Compteur d'utilisation de l'authentificateur (utilisé pour éviter les attaques de relecture).
+  credentialDeviceType String  // Type d'appareil de l'authentificateur (e.g., single-device, multi-device).
+  credentialBackedUp   Boolean // Indique si l'authentificateur est sauvegardé (utilisé pour les appareils multi-device).
+  transports           String? // Moyens de transport utilisés par l'authentificateur (e.g., USB, NFC), facultatif.
+ 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // Relation avec le modèle User. Si l'utilisateur est supprimé, les authentificateurs associés le seront aussi.
+ 
+  @@id([userId, credentialID]) // Contrainte d'unicité sur le couple (userId, credentialID).
+}
